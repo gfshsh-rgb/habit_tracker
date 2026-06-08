@@ -70,7 +70,7 @@ body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-s
 .habit-icon { width: 28px; height: 28px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
 .habit-name { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .habit-streak { font-size: 11px; color: var(--text2); font-family: 'DM Mono', monospace; }
-.habit-del { font-size: 16px; color: var(--text3); cursor: pointer; padding: 4px; flex-shrink: 0; background: none; border: none; color: var(--text3); transition: color 0.15s; }
+.habit-del { font-size: 16px; cursor: pointer; padding: 4px; flex-shrink: 0; background: none; border: none; color: var(--text3); transition: color 0.15s; }
 .habit-del:hover { color: var(--text2); }
 
 /* Week grid */
@@ -116,19 +116,6 @@ body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-s
 .add-btn:active { opacity: 0.8; }
 
 .empty { font-size: 13px; color: var(--text3); padding: 1rem 0; text-align: center; }
-
-/* Notification panel */
-.notif-panel { background: var(--bg2); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 16px; margin-bottom: 1.5rem; }
-.notif-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; }
-.notif-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 12px; }
-.notif-lbl { font-size: 13px; color: var(--text2); flex: 1; }
-.notif-time { background: var(--bg3); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 6px 10px; font-size: 13px; color: var(--text); font-family: 'DM Mono', monospace; width: 90px; outline: none; }
-.notif-toggle { width: 44px; height: 26px; border-radius: 13px; background: var(--bg3); border: 0.5px solid var(--border2); cursor: pointer; position: relative; transition: background 0.2s; flex-shrink: 0; }
-.notif-toggle.on { background: #5DCAA5; border-color: #5DCAA5; }
-.notif-knob { width: 20px; height: 20px; border-radius: 50%; background: var(--text); position: absolute; top: 2px; left: 3px; transition: left 0.2s; }
-.notif-toggle.on .notif-knob { left: 21px; }
-.notif-status { font-size: 11px; color: var(--text3); margin-top: 6px; }
-.notif-expand-btn { font-size: 11px; color: var(--text3); background: none; border: none; cursor: pointer; padding: 0; }
 </style>
 </head>
 <body>
@@ -159,7 +146,6 @@ body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-s
     <button class="cat-tab" onclick="setCat('wellness',this)">Wellness</button>
   </div>
 
-  <div id="notifPanel"></div>
   <div id="habitList"></div>
 </div>
 
@@ -175,7 +161,7 @@ body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-s
 </div>
 
 <script>
-const SK = 'matze_habits_v2';
+const SK = 'matze_habits_v3';
 const CATS = {
   fitness:   { label:'Fitness / Sport',         emoji:'💪', color:'var(--fitness)',   bg:'var(--fitness-bg)'   },
   nutrition: { label:'Ernährung',               emoji:'🥗', color:'var(--nutrition)', bg:'var(--nutrition-bg)' },
@@ -189,7 +175,6 @@ let state = { habits:[], checks:{} };
 let currentView = 'week';
 let currentCat = 'all';
 
-/* ── helpers ── */
 function today() { const d = new Date(); d.setHours(0,0,0,0); return d; }
 function dk(d) { return d.toISOString().slice(0,10); }
 function ck(hid, d) { return hid+'_'+dk(d); }
@@ -237,7 +222,6 @@ function catLongestStreak(cat) {
   return Math.max(...habits.map(h=>calcLongestStreak(h.id)));
 }
 
-/* ── storage ── */
 function load() {
   try { const r=localStorage.getItem(SK); if(r) state=JSON.parse(r); } catch(e){}
   if(!state.habits) state.habits=[];
@@ -255,7 +239,6 @@ function seed() {
   ]; save();
 }
 
-/* ── actions ── */
 function toggle(hid, dateStr, isFuture) {
   if(isFuture) return;
   const k=hid+'_'+dateStr;
@@ -282,14 +265,12 @@ function setCat(c,btn) {
   btn.classList.add('active'); render();
 }
 
-/* ── render ── */
 function render() {
   const t=today();
   document.getElementById('headerDate').textContent =
     t.toLocaleDateString('de-DE',{weekday:'short',day:'2-digit',month:'short'}).replace('.',' ');
 
   const wd=weekDates();
-  const todayStr=dk(t);
   let todayDone=0, wkTotal=0, wkDone=0, bestS=0;
   state.habits.forEach(h=>{
     if(state.checks[ck(h.id,t)]) todayDone++;
@@ -363,22 +344,7 @@ function renderWeek(h,wd,t) {
 function renderMonth(h,md,t) {
   const color=CATS[h.cat].color;
   let s='<div class="month-wrap"><div class="month-grid">';
-  // group by week column (Mon-Sun)
-  const firstMon=getMonday(md[0]);
-  const cols={};
-  md.forEach(d=>{
-    const day=d.getDay(); const col=(day===0?6:day-1);
-    if(!cols[col]) cols[col]=[];
-    cols[col].push(d);
-  });
-  // pad and build
-  const padded=Array.from({length:7},(_,col)=>{
-    const days=cols[col]||[];
-    return days;
-  });
-  // Find the week offset for the first day
-  const firstDay=md[0].getDay(); const firstCol=firstDay===0?6:firstDay-1;
-  // Build column-by-column display (day of week as columns, dates as rows)
+  const firstDay=md[0].getDay();
   for(let col=0;col<7;col++){
     s+=`<div class="month-col"><div class="month-col-header">${DAY_SHORT[col]}</div>`;
     let startDate=new Date(md[0]);
@@ -402,40 +368,27 @@ function renderMonth(h,md,t) {
 
 function renderYear(h,yd,t) {
   const color=CATS[h.cat].color;
-  // group by month for labels
-  const months={};
-  yd.forEach(d=>{ const m=d.getMonth(); if(!months[m]) months[m]={start:d,count:0}; months[m].count++; });
-  
-  // Build week-columns like GitHub contribution graph
   const first=yd[0];
   const firstDow=first.getDay(); const offset=firstDow===0?6:firstDow-1;
-  
-  // pad beginning
   const cells=[];
   for(let i=0;i<offset;i++) cells.push(null);
   yd.forEach(d=>cells.push(d));
-  
-  // build weeks (columns of 7)
   const weeks=[];
-  for(let i=0;i<cells.length;i+=7){
-    weeks.push(cells.slice(i,i+7));
-  }
-  
-  // month labels
-  let monthHtml='<div class="year-months" style="gap:0;margin-bottom:4px;">';
-  let curMonth=-1; let wIdx=0;
-  weeks.forEach((w,wi)=>{
+  for(let i=0;i<cells.length;i+=7) weeks.push(cells.slice(i,i+7));
+
+  let monthHtml='<div style="display:flex;gap:0;margin-bottom:4px;">';
+  let curMonth=-1;
+  weeks.forEach(w=>{
     const firstReal=w.find(d=>d!==null);
     if(firstReal && firstReal.getMonth()!==curMonth){
       curMonth=firstReal.getMonth();
-      const wPx=15; // ~15px per week cell+gap
-      monthHtml+=`<div class="year-month-lbl" style="width:${wPx}px;min-width:${wPx}px;">${MON_SHORT[curMonth]}</div>`;
+      monthHtml+=`<div style="width:15px;min-width:15px;font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;">${MON_SHORT[curMonth]}</div>`;
     } else {
       monthHtml+=`<div style="width:15px;min-width:15px;"></div>`;
     }
   });
   monthHtml+='</div>';
-  
+
   let gridHtml='<div style="display:flex;gap:3px;">';
   weeks.forEach(w=>{
     gridHtml+='<div style="display:flex;flex-direction:column;gap:3px;">';
@@ -451,117 +404,13 @@ function renderYear(h,yd,t) {
     gridHtml+='</div>';
   });
   gridHtml+='</div>';
-  
+
   return `<div style="overflow-x:auto;padding-bottom:4px;">${monthHtml}${gridHtml}</div>`;
 }
 
 function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-/* ── notifications ── */
-const NSK = 'matze_notif_v1';
-let notifState = { morningOn:false, morningTime:'07:00', eveningOn:false, eveningTime:'20:00', expanded:false };
-
-function loadNotif() {
-  try { const r=localStorage.getItem(NSK); if(r) notifState=Object.assign(notifState,JSON.parse(r)); } catch(e){}
-}
-function saveNotif() { try { localStorage.setItem(NSK,JSON.stringify(notifState)); } catch(e){} }
-
-function renderNotifPanel() {
-  const perm = ('Notification' in window) ? Notification.permission : 'unsupported';
-  const supported = 'Notification' in window && 'serviceWorker' in navigator;
-  const p = document.getElementById('notifPanel');
-  if(!p) return;
-
-  if(!notifState.expanded) {
-    const activeCount = (notifState.morningOn?1:0)+(notifState.eveningOn?1:0);
-    p.innerHTML=`<div class="notif-panel" style="padding:12px 16px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;">
-        <div style="font-size:13px;color:var(--text2);">🔔 ${activeCount>0?activeCount+' Erinnerung'+(activeCount>1?'en':')+' aktiv':'Erinnerungen einrichten'}</div>
-        <button class="notif-expand-btn" onclick="toggleNotifPanel()">Einstellungen ›</button>
-      </div>
-    </div>`;
-    return;
-  }
-
-  let statusMsg = '';
-  if(!supported) statusMsg='Benachrichtigungen werden in diesem Browser nicht unterstützt.';
-  else if(perm==='denied') statusMsg='Benachrichtigungen blockiert. Bitte in den iPhone-Einstellungen erlauben.';
-  else if(perm==='granted') statusMsg='Benachrichtigungen erlaubt ✓';
-  else statusMsg='Tippe auf einen Toggle — du wirst nach Erlaubnis gefragt.';
-
-  p.innerHTML=`<div class="notif-panel">
-    <div class="notif-title">
-      <span>🔔 Erinnerungen</span>
-      <button class="notif-expand-btn" onclick="toggleNotifPanel()">✕</button>
-    </div>
-    <div class="notif-row">
-      <span class="notif-lbl">Morgens</span>
-      <input type="time" class="notif-time" value="${notifState.morningTime}" onchange="notifState.morningTime=this.value;saveNotif();scheduleAll();">
-      <div class="notif-toggle ${notifState.morningOn?'on':''}" onclick="toggleNotif('morning')"><div class="notif-knob"></div></div>
-    </div>
-    <div class="notif-row">
-      <span class="notif-lbl">Abends</span>
-      <input type="time" class="notif-time" value="${notifState.eveningTime}" onchange="notifState.eveningTime=this.value;saveNotif();scheduleAll();">
-      <div class="notif-toggle ${notifState.eveningOn?'on':''}" onclick="toggleNotif('evening')"><div class="notif-knob"></div></div>
-    </div>
-    <div class="notif-status">${statusMsg}</div>
-  </div>`;
-}
-
-function toggleNotifPanel() {
-  notifState.expanded=!notifState.expanded;
-  saveNotif();
-  renderNotifPanel();
-}
-
-async function toggleNotif(which) {
-  if(!('Notification' in window)) return;
-  if(Notification.permission==='denied') { renderNotifPanel(); return; }
-  if(Notification.permission!=='granted') {
-    const res = await Notification.requestPermission();
-    if(res!=='granted') { renderNotifPanel(); return; }
-  }
-  if(which==='morning') notifState.morningOn=!notifState.morningOn;
-  else notifState.eveningOn=!notifState.eveningOn;
-  saveNotif();
-  scheduleAll();
-  renderNotifPanel();
-}
-
-function scheduleAll() {
-  // Clear existing timers
-  if(window.__notifTimers) window.__notifTimers.forEach(t=>clearTimeout(t));
-  window.__notifTimers = [];
-  if(!('Notification' in window) || Notification.permission !== 'granted') return;
-
-  const schedules = [];
-  if(notifState.morningOn) schedules.push({label:'Morgen', time:notifState.morningTime});
-  if(notifState.eveningOn) schedules.push({label:'Abend', time:notifState.eveningTime});
-
-  schedules.forEach(s => {
-    const [h,m] = s.time.split(':').map(Number);
-    const now = new Date();
-    let target = new Date();
-    target.setHours(h, m, 0, 0);
-    if(target <= now) target.setDate(target.getDate() + 1);
-    const ms = target - now;
-    const t = setTimeout(() => {
-      new Notification('Habits 💪', {
-        body: 'Hast du deine Habits heute schon erledigt?',
-        tag: 'habit-' + s.label
-      });
-      scheduleAll(); // reschedule for next day
-    }, ms);
-    window.__notifTimers.push(t);
-  });
-}
-
-function registerSW() {
-  // No service worker needed — using setTimeout scheduling
-  renderNotifPanel();
-}
-
-load(); loadNotif(); registerSW(); render(); renderNotifPanel();
+load(); render();
 </script>
 </body>
 </html>
