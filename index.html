@@ -175,7 +175,7 @@ body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-s
 </div>
 
 <script>
-const SK = 'matze_habits_v3';
+const SK = 'matze_habits_v2';
 const CATS = {
   fitness:   { label:'Fitness / Sport',         emoji:'💪', color:'var(--fitness)',   bg:'var(--fitness-bg)'   },
   nutrition: { label:'Ernährung',               emoji:'🥗', color:'var(--nutrition)', bg:'var(--nutrition-bg)' },
@@ -529,47 +529,36 @@ async function toggleNotif(which) {
 }
 
 function scheduleAll() {
-  if(!('serviceWorker' in navigator)) return;
-  navigator.serviceWorker.ready.then(reg=>{
-    const schedules=[];
-    if(notifState.morningOn) schedules.push({label:'Morgen', time:notifState.morningTime});
-    if(notifState.eveningOn) schedules.push({label:'Abend', time:notifState.eveningTime});
-    reg.active && reg.active.postMessage({ type:'SCHEDULE', schedules });
-  }).catch(()=>{});
+  // Clear existing timers
+  if(window.__notifTimers) window.__notifTimers.forEach(t=>clearTimeout(t));
+  window.__notifTimers = [];
+  if(!('Notification' in window) || Notification.permission !== 'granted') return;
+
+  const schedules = [];
+  if(notifState.morningOn) schedules.push({label:'Morgen', time:notifState.morningTime});
+  if(notifState.eveningOn) schedules.push({label:'Abend', time:notifState.eveningTime});
+
+  schedules.forEach(s => {
+    const [h,m] = s.time.split(':').map(Number);
+    const now = new Date();
+    let target = new Date();
+    target.setHours(h, m, 0, 0);
+    if(target <= now) target.setDate(target.getDate() + 1);
+    const ms = target - now;
+    const t = setTimeout(() => {
+      new Notification('Habits 💪', {
+        body: 'Hast du deine Habits heute schon erledigt?',
+        tag: 'habit-' + s.label
+      });
+      scheduleAll(); // reschedule for next day
+    }, ms);
+    window.__notifTimers.push(t);
+  });
 }
 
 function registerSW() {
-  if(!('serviceWorker' in navigator)) return;
-  const swCode = `
-self.addEventListener('message', e => {
-  if(e.data && e.data.type==='SCHEDULE') {
-    self.__schedules = e.data.schedules || [];
-  }
-});
-self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
-
-function checkAndNotify() {
-  const now = new Date();
-  const hhmm = now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
-  (self.__schedules||[]).forEach(s => {
-    if(s.time === hhmm) {
-      self.registration.showNotification('Habits ✓', {
-        body: s.label+': Hast du deine Habits heute schon erledigt?',
-        icon: 'https://cdn.jsdelivr.net/npm/twemoji@14/assets/72x72/1f4aa.png',
-        badge: 'https://cdn.jsdelivr.net/npm/twemoji@14/assets/72x72/1f4aa.png',
-        tag: 'habit-reminder-'+s.label,
-        renotify: true
-      });
-    }
-  });
-}
-setInterval(checkAndNotify, 60000);
-  `;
-  const blob = new Blob([swCode], {type:'application/javascript'});
-  const swUrl = URL.createObjectURL(blob);
-  navigator.serviceWorker.register(swUrl, {scope:'/'})
-    .then(()=>{ scheduleAll(); renderNotifPanel(); })
-    .catch(()=>{ renderNotifPanel(); });
+  // No service worker needed — using setTimeout scheduling
+  renderNotifPanel();
 }
 
 load(); loadNotif(); registerSW(); render(); renderNotifPanel();
