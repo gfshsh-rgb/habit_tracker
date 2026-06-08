@@ -116,6 +116,19 @@ body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-s
 .add-btn:active { opacity: 0.8; }
 
 .empty { font-size: 13px; color: var(--text3); padding: 1rem 0; text-align: center; }
+
+/* Notification panel */
+.notif-panel { background: var(--bg2); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 16px; margin-bottom: 1.5rem; }
+.notif-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; }
+.notif-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 12px; }
+.notif-lbl { font-size: 13px; color: var(--text2); flex: 1; }
+.notif-time { background: var(--bg3); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 6px 10px; font-size: 13px; color: var(--text); font-family: 'DM Mono', monospace; width: 90px; outline: none; }
+.notif-toggle { width: 44px; height: 26px; border-radius: 13px; background: var(--bg3); border: 0.5px solid var(--border2); cursor: pointer; position: relative; transition: background 0.2s; flex-shrink: 0; }
+.notif-toggle.on { background: #5DCAA5; border-color: #5DCAA5; }
+.notif-knob { width: 20px; height: 20px; border-radius: 50%; background: var(--text); position: absolute; top: 2px; left: 3px; transition: left 0.2s; }
+.notif-toggle.on .notif-knob { left: 21px; }
+.notif-status { font-size: 11px; color: var(--text3); margin-top: 6px; }
+.notif-expand-btn { font-size: 11px; color: var(--text3); background: none; border: none; cursor: pointer; padding: 0; }
 </style>
 </head>
 <body>
@@ -146,6 +159,7 @@ body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-s
     <button class="cat-tab" onclick="setCat('wellness',this)">Wellness</button>
   </div>
 
+  <div id="notifPanel"></div>
   <div id="habitList"></div>
 </div>
 
@@ -443,7 +457,122 @@ function renderYear(h,yd,t) {
 
 function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-load(); render();
+/* ── notifications ── */
+const NSK = 'matze_notif_v1';
+let notifState = { morningOn:false, morningTime:'07:00', eveningOn:false, eveningTime:'20:00', expanded:false };
+
+function loadNotif() {
+  try { const r=localStorage.getItem(NSK); if(r) notifState=Object.assign(notifState,JSON.parse(r)); } catch(e){}
+}
+function saveNotif() { try { localStorage.setItem(NSK,JSON.stringify(notifState)); } catch(e){} }
+
+function renderNotifPanel() {
+  const perm = ('Notification' in window) ? Notification.permission : 'unsupported';
+  const supported = 'Notification' in window && 'serviceWorker' in navigator;
+  const p = document.getElementById('notifPanel');
+  if(!p) return;
+
+  if(!notifState.expanded) {
+    const activeCount = (notifState.morningOn?1:0)+(notifState.eveningOn?1:0);
+    p.innerHTML=`<div class="notif-panel" style="padding:12px 16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div style="font-size:13px;color:var(--text2);">🔔 ${activeCount>0?activeCount+' Erinnerung'+(activeCount>1?'en':')+' aktiv':'Erinnerungen einrichten'}</div>
+        <button class="notif-expand-btn" onclick="toggleNotifPanel()">Einstellungen ›</button>
+      </div>
+    </div>`;
+    return;
+  }
+
+  let statusMsg = '';
+  if(!supported) statusMsg='Benachrichtigungen werden in diesem Browser nicht unterstützt.';
+  else if(perm==='denied') statusMsg='Benachrichtigungen blockiert. Bitte in den iPhone-Einstellungen erlauben.';
+  else if(perm==='granted') statusMsg='Benachrichtigungen erlaubt ✓';
+  else statusMsg='Tippe auf einen Toggle — du wirst nach Erlaubnis gefragt.';
+
+  p.innerHTML=`<div class="notif-panel">
+    <div class="notif-title">
+      <span>🔔 Erinnerungen</span>
+      <button class="notif-expand-btn" onclick="toggleNotifPanel()">✕</button>
+    </div>
+    <div class="notif-row">
+      <span class="notif-lbl">Morgens</span>
+      <input type="time" class="notif-time" value="${notifState.morningTime}" onchange="notifState.morningTime=this.value;saveNotif();scheduleAll();">
+      <div class="notif-toggle ${notifState.morningOn?'on':''}" onclick="toggleNotif('morning')"><div class="notif-knob"></div></div>
+    </div>
+    <div class="notif-row">
+      <span class="notif-lbl">Abends</span>
+      <input type="time" class="notif-time" value="${notifState.eveningTime}" onchange="notifState.eveningTime=this.value;saveNotif();scheduleAll();">
+      <div class="notif-toggle ${notifState.eveningOn?'on':''}" onclick="toggleNotif('evening')"><div class="notif-knob"></div></div>
+    </div>
+    <div class="notif-status">${statusMsg}</div>
+  </div>`;
+}
+
+function toggleNotifPanel() {
+  notifState.expanded=!notifState.expanded;
+  saveNotif();
+  renderNotifPanel();
+}
+
+async function toggleNotif(which) {
+  if(!('Notification' in window)) return;
+  if(Notification.permission==='denied') { renderNotifPanel(); return; }
+  if(Notification.permission!=='granted') {
+    const res = await Notification.requestPermission();
+    if(res!=='granted') { renderNotifPanel(); return; }
+  }
+  if(which==='morning') notifState.morningOn=!notifState.morningOn;
+  else notifState.eveningOn=!notifState.eveningOn;
+  saveNotif();
+  scheduleAll();
+  renderNotifPanel();
+}
+
+function scheduleAll() {
+  if(!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.ready.then(reg=>{
+    const schedules=[];
+    if(notifState.morningOn) schedules.push({label:'Morgen', time:notifState.morningTime});
+    if(notifState.eveningOn) schedules.push({label:'Abend', time:notifState.eveningTime});
+    reg.active && reg.active.postMessage({ type:'SCHEDULE', schedules });
+  }).catch(()=>{});
+}
+
+function registerSW() {
+  if(!('serviceWorker' in navigator)) return;
+  const swCode = `
+self.addEventListener('message', e => {
+  if(e.data && e.data.type==='SCHEDULE') {
+    self.__schedules = e.data.schedules || [];
+  }
+});
+self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
+
+function checkAndNotify() {
+  const now = new Date();
+  const hhmm = now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
+  (self.__schedules||[]).forEach(s => {
+    if(s.time === hhmm) {
+      self.registration.showNotification('Habits ✓', {
+        body: s.label+': Hast du deine Habits heute schon erledigt?',
+        icon: 'https://cdn.jsdelivr.net/npm/twemoji@14/assets/72x72/1f4aa.png',
+        badge: 'https://cdn.jsdelivr.net/npm/twemoji@14/assets/72x72/1f4aa.png',
+        tag: 'habit-reminder-'+s.label,
+        renotify: true
+      });
+    }
+  });
+}
+setInterval(checkAndNotify, 60000);
+  `;
+  const blob = new Blob([swCode], {type:'application/javascript'});
+  const swUrl = URL.createObjectURL(blob);
+  navigator.serviceWorker.register(swUrl, {scope:'/'})
+    .then(()=>{ scheduleAll(); renderNotifPanel(); })
+    .catch(()=>{ renderNotifPanel(); });
+}
+
+load(); loadNotif(); registerSW(); render(); renderNotifPanel();
 </script>
 </body>
 </html>
