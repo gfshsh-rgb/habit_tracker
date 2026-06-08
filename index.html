@@ -220,7 +220,7 @@ function calcLongestStreak(hid) {
 function catLongestStreak(cat) {
   const habits = state.habits.filter(h=>h.cat===cat);
   if(!habits.length) return 0;
-  return Math.max(...habits.map(h=>calcLongestStreak(h)));
+  return Math.max(...habits.map(h=>calcLongestStreak(h.id)));
 }
 
 /* ── storage ── */
@@ -278,9 +278,9 @@ function render() {
   const todayStr=dk(t);
   let todayDone=0, wkTotal=0, wkDone=0, bestS=0;
   state.habits.forEach(h=>{
-    if(state.checks[ck(h,t)]) todayDone++;
-    wd.forEach(d=>{ wkTotal++; if(state.checks[ck(h,d)]) wkDone++; });
-    bestS=Math.max(bestS,calcStreak(h));
+    if(state.checks[ck(h.id,t)]) todayDone++;
+    wd.forEach(d=>{ wkTotal++; if(state.checks[ck(h.id,d)]) wkDone++; });
+    bestS=Math.max(bestS,calcStreak(h.id));
   });
   document.getElementById('s-today').textContent=todayDone+'/'+state.habits.length;
   document.getElementById('s-week').textContent=wkTotal?Math.round(wkDone/wkTotal*100)+'%':'0%';
@@ -305,7 +305,7 @@ function render() {
           <div class="cat-streak-badge" style="background:${ci.bg};color:${ci.color}">🔥 ${ls} Tage</div>
         </div>`;
       habits.forEach(h=>{
-        const streak=calcStreak(h);
+        const streak=calcStreak(h.id);
         html+=`<div class="habit-row">
           <div class="habit-top">
             <div class="habit-left">
